@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 )
@@ -31,20 +30,19 @@ type Response struct {
 	Data2  interface{} `json:"data2"`
 }
 
-// DoGetBytes is a general function to get response from param url through HTTP Get method.
-func DoGetBytes(url string) ([]byte, error) {
+func doGet(url string) (response *Response, err error) {
 	client := &http.Client{}
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	req.SetBasicAuth(authConfig.ClientId, authConfig.ClientSecret)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -53,16 +51,18 @@ func DoGetBytes(url string) ([]byte, error) {
 		}
 	}(resp.Body)
 
-	respByte, err := ioutil.ReadAll(resp.Body)
+	err = json.NewDecoder(resp.Body).Decode(response)
 	if err != nil {
 		return nil, err
 	}
 
-	var response Response
-	err = json.Unmarshal(respByte, &response)
-	if err != nil {
-		return nil, err
-	}
+	return
+}
+
+// DoGetBytes is a general function to get response from param url through HTTP Get method.
+func DoGetBytes(url string) ([]byte, error) {
+
+	var response, err = doGet(url)
 
 	if response.Status != "ok" {
 		return nil, fmt.Errorf(response.Msg)
@@ -76,18 +76,18 @@ func DoGetBytes(url string) ([]byte, error) {
 	return res, nil
 }
 
-func doPost(action string, queryMap map[string]string, postBytes []byte, isFile bool) (*Response, error) {
+// jsonPost will post request and parse respStrcut
+func jsonPost(action string, queryMap map[string]string, postBytes []byte, isFile bool, respStrcut interface{}) (err error) {
 	client := &http.Client{}
 	url := GetUrl(action, queryMap)
 
 	var resp *http.Response
-	var err error
 	var contentType string
 	var body io.Reader
 	if isFile {
 		contentType, body, err = createForm(map[string][]byte{"file": postBytes})
 		if err != nil {
-			return nil, err
+			return
 		}
 	} else {
 		contentType = "text/plain;charset=UTF-8"
@@ -96,7 +96,7 @@ func doPost(action string, queryMap map[string]string, postBytes []byte, isFile 
 
 	req, err := http.NewRequest("POST", url, body)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	req.SetBasicAuth(authConfig.ClientId, authConfig.ClientSecret)
@@ -104,7 +104,7 @@ func doPost(action string, queryMap map[string]string, postBytes []byte, isFile 
 
 	resp, err = client.Do(req)
 	if err != nil {
-		return nil, err
+		return
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -113,18 +113,15 @@ func doPost(action string, queryMap map[string]string, postBytes []byte, isFile 
 		}
 	}(resp.Body)
 
-	respByte, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
+	return json.NewDecoder(resp.Body).Decode(&respStrcut)
+}
 
-	var response Response
-	err = json.Unmarshal(respByte, &response)
-	if err != nil {
-		return nil, err
-	}
+func doPost(action string, queryMap map[string]string, postBytes []byte, isFile bool) (*Response, error) {
+	var response *Response
 
-	return &response, nil
+	jsonPost(action, queryMap, postBytes, isFile, response)
+
+	return response, nil
 }
 
 // modifyUser is an encapsulation of user CUD(Create, Update, Delete) operations.

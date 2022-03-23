@@ -23,6 +23,11 @@ import (
 	"golang.org/x/oauth2"
 )
 
+var (
+	refresh_token_uri = "/api/login/oauth/refresh_token"
+	token_logout_uri  = "/api/login/oauth/logout"
+)
+
 // GetOAuthToken gets the pivotal and necessary secret to interact with the Casdoor server
 func GetOAuthToken(code string, state string) (*oauth2.Token, error) {
 	config := oauth2.Config{
@@ -47,4 +52,39 @@ func GetOAuthToken(code string, state string) (*oauth2.Token, error) {
 	}
 
 	return token, err
+}
+
+// RefreshToken will refresh access token via refresh token.
+func RefreshToken(refresh_token string) (token *oauth2.Token, err error) {
+	var queryMap = map[string]string{
+		"grant_type":    "refresh_token",
+		"scope":         "read",
+		"refresh_token": refresh_token,
+		"client_id":     authConfig.ClientId,
+		"client_secret": authConfig.ClientSecret,
+	}
+
+	err = jsonPost(refresh_token_uri, queryMap, nil, false, token)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
+// TokenLogout will revocation access token.
+func TokenLogout(access_token, state string) (ok bool, err error) {
+	var queryMap = map[string]string{
+		"id_token_hint": access_token,
+		"state":         state,
+	}
+
+	var uri = GetUrl(token_logout_uri, queryMap)
+	var resp *Response
+	resp, err = doGet(uri)
+	if err != nil {
+		return
+	}
+
+	return resp.Data == "Affected", nil
 }
