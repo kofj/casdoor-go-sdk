@@ -61,6 +61,7 @@ type User struct {
 	UpdatedTime string `xorm:"varchar(100)" json:"updatedTime"`
 
 	Id                string   `xorm:"varchar(100) index" json:"id"`
+	ExternalId        string   `xorm:"varchar(100) index" json:"externalId"`
 	Type              string   `xorm:"varchar(100)" json:"type"`
 	Password          string   `xorm:"varchar(100)" json:"password"`
 	PasswordSalt      string   `xorm:"varchar(100)" json:"passwordSalt"`
@@ -95,7 +96,6 @@ type User struct {
 	IsDefaultAvatar   bool     `json:"isDefaultAvatar"`
 	IsOnline          bool     `json:"isOnline"`
 	IsAdmin           bool     `json:"isAdmin"`
-	IsGlobalAdmin     bool     `json:"isGlobalAdmin"`
 	IsForbidden       bool     `json:"isForbidden"`
 	IsDeleted         bool     `json:"isDeleted"`
 	SignupApplication string   `xorm:"varchar(100)" json:"signupApplication"`
@@ -182,16 +182,16 @@ type User struct {
 	Yandex          string `xorm:"yandex varchar(100)" json:"yandex"`
 	Zoom            string `xorm:"zoom varchar(100)" json:"zoom"`
 	MetaMask        string `xorm:"metamask varchar(100)" json:"metamask"`
+	Web3Onboard     string `xorm:"web3onboard varchar(100)" json:"web3onboard"`
 	Custom          string `xorm:"custom varchar(100)" json:"custom"`
 
 	// WebauthnCredentials []webauthn.Credential `xorm:"webauthnCredentials blob" json:"webauthnCredentials"`
-	// MultiFactorAuths    []*MfaProps           `xorm:"-" json:"multiFactorAuths,omitempty"`
-
 	PreferredMfaType string   `xorm:"varchar(100)" json:"preferredMfaType"`
 	RecoveryCodes    []string `xorm:"varchar(1000)" json:"recoveryCodes"`
 	TotpSecret       string   `xorm:"varchar(100)" json:"totpSecret"`
 	MfaPhoneEnabled  bool     `json:"mfaPhoneEnabled"`
 	MfaEmailEnabled  bool     `json:"mfaEmailEnabled"`
+	// MultiFactorAuths    []*MfaProps           `xorm:"-" json:"multiFactorAuths,omitempty"`
 
 	Ldap       string            `xorm:"ldap varchar(100)" json:"ldap"`
 	Properties map[string]string `json:"properties"`
@@ -203,7 +203,8 @@ type User struct {
 	LastSigninWrongTime string `xorm:"varchar(100)" json:"lastSigninWrongTime"`
 	SigninWrongTimes    int    `json:"signinWrongTimes"`
 
-	ManagedAccounts []ManagedAccount `xorm:"managedAccounts blob" json:"managedAccounts"`
+	ManagedAccounts    []ManagedAccount `xorm:"managedAccounts blob" json:"managedAccounts"`
+	NeedUpdatePassword bool             `json:"needUpdatePassword"`
 }
 
 func (c *Client) GetGlobalUsers() ([]*User, error) {
@@ -276,8 +277,14 @@ func (c *Client) GetPaginationUsers(p int, pageSize int, queryMap map[string]str
 		return nil, 0, err
 	}
 
-	users, ok := response.Data.([]*User)
-	if !ok {
+	dataBytes, err := json.Marshal(response.Data)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var users []*User
+	err = json.Unmarshal(dataBytes, &users)
+	if err != nil {
 		return nil, 0, errors.New("response data format is incorrect")
 	}
 
@@ -436,8 +443,8 @@ func (c *Client) DeleteUser(user *User) (bool, error) {
 }
 
 func (c *Client) CheckUserPassword(user *User) (bool, error) {
-	response, _, err := c.modifyUser("check-user-password", user, nil)
-	return response.Status == "ok", err
+	_, affected, err := c.modifyUser("check-user-password", user, nil)
+	return affected, err
 }
 
 func (u User) GetId() string {

@@ -67,16 +67,22 @@ func (c *Client) GetPaginationSessions(p int, pageSize int, queryMap map[string]
 		return nil, 0, err
 	}
 
-	sessions, ok := response.Data.([]*Session)
-	if !ok {
+	dataBytes, err := json.Marshal(response.Data)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var sessions []*Session
+	err = json.Unmarshal(dataBytes, &sessions)
+	if err != nil {
 		return nil, 0, errors.New("response data format is incorrect")
 	}
 	return sessions, int(response.Data2.(float64)), nil
 }
 
-func (c *Client) GetSession(name string) (*Session, error) {
+func (c *Client) GetSession(name string, application string) (*Session, error) {
 	queryMap := map[string]string{
-		"id": fmt.Sprintf("%s/%s", c.OrganizationName, name),
+		"sessionPkId": fmt.Sprintf("%s/%s/%s", c.OrganizationName, name, application),
 	}
 
 	url := c.GetUrl("get-session", queryMap)

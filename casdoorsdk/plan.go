@@ -29,10 +29,12 @@ type Plan struct {
 	DisplayName string `xorm:"varchar(100)" json:"displayName"`
 	Description string `xorm:"varchar(100)" json:"description"`
 
-	PricePerMonth float64 `json:"pricePerMonth"`
-	PricePerYear  float64 `json:"pricePerYear"`
-	Currency      string  `xorm:"varchar(100)" json:"currency"`
-	IsEnabled     bool    `json:"isEnabled"`
+	Price            float64  `json:"price"`
+	Currency         string   `xorm:"varchar(100)" json:"currency"`
+	Period           string   `xorm:"varchar(100)" json:"period"`
+	Product          string   `xorm:"varchar(100)" json:"product"`
+	PaymentProviders []string `xorm:"varchar(100)" json:"paymentProviders"` // payment providers for related product
+	IsEnabled        bool     `json:"isEnabled"`
 
 	Role    string   `xorm:"varchar(100)" json:"role"`
 	Options []string `xorm:"-" json:"options"`
@@ -70,8 +72,14 @@ func (c *Client) GetPaginationPlans(p int, pageSize int, queryMap map[string]str
 		return nil, 0, err
 	}
 
-	plans, ok := response.Data.([]*Plan)
-	if !ok {
+	dataBytes, err := json.Marshal(response.Data)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var plans []*Plan
+	err = json.Unmarshal(dataBytes, &plans)
+	if err != nil {
 		return nil, 0, errors.New("response data format is incorrect")
 	}
 

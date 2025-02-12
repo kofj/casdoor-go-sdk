@@ -15,14 +15,10 @@
 package casdoorsdk
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
-
-	"golang.org/x/oauth2"
 )
 
 // Token has the same definition as https://github.com/casdoor/casdoor/blob/master/object/token.go#L45
@@ -46,64 +42,44 @@ type Token struct {
 	CodeExpireIn  int64  `json:"codeExpireIn"`
 }
 
-// GetOAuthToken gets the pivotal and necessary secret to interact with the Casdoor server
-func (c *Client) GetOAuthToken(code string, state string) (*oauth2.Token, error) {
-	config := oauth2.Config{
-		ClientID:     c.ClientId,
-		ClientSecret: c.ClientSecret,
-		Endpoint: oauth2.Endpoint{
-			AuthURL:   fmt.Sprintf("%s/api/login/oauth/authorize", c.Endpoint),
-			TokenURL:  fmt.Sprintf("%s/api/login/oauth/access_token", c.Endpoint),
-			AuthStyle: oauth2.AuthStyleInParams,
-		},
-		// RedirectURL: redirectUri,
-		Scopes: nil,
-	}
-
-	token, err := config.Exchange(context.Background(), code)
-	if err != nil {
-		return token, err
-	}
-
-	if strings.HasPrefix(token.AccessToken, "error:") {
-		return nil, errors.New(strings.TrimPrefix(token.AccessToken, "error: "))
-	}
-
-	return token, err
+type IntrospectTokenResult struct {
+	Active    bool     `json:"active"`
+	ClientId  string   `json:"client_id"`
+	Username  string   `json:"username"`
+	TokenType string   `json:"token_type"`
+	Exp       uint     `json:"exp"`
+	Iat       uint     `json:"iat"`
+	Nbf       uint     `json:"nbf"`
+	Sub       string   `json:"sub"`
+	Aud       []string `json:"aud"`
+	Iss       string   `json:"iss"`
+	Jti       string   `json:"jti"`
 }
 
-// RefreshOAuthToken refreshes the OAuth token
-func (c *Client) RefreshOAuthToken(refreshToken string) (*oauth2.Token, error) {
-	config := oauth2.Config{
-		ClientID:     c.ClientId,
-		ClientSecret: c.ClientSecret,
-		Endpoint: oauth2.Endpoint{
-			AuthURL:   fmt.Sprintf("%s/api/login/oauth/authorize", c.Endpoint),
-			TokenURL:  fmt.Sprintf("%s/api/login/oauth/refresh_token", c.Endpoint),
-			AuthStyle: oauth2.AuthStyleInParams,
-		},
-		// RedirectURL: redirectUri,
-		Scopes: nil,
-	}
-
-	token, err := config.TokenSource(context.Background(), &oauth2.Token{RefreshToken: refreshToken}).Token()
-	if err != nil {
-		return token, err
-	}
-
-	if strings.HasPrefix(token.AccessToken, "error:") {
-		return nil, errors.New(strings.TrimPrefix(token.AccessToken, "error: "))
-	}
-
-	return token, err
-}
-
-func (c *Client) GetTokens(p int, pageSize int) ([]*Token, int, error) {
+func (c *Client) GetTokens() ([]*Token, error) {
 	queryMap := map[string]string{
-		"owner":    c.OrganizationName,
-		"p":        strconv.Itoa(p),
-		"pageSize": strconv.Itoa(pageSize),
+		"owner": "admin",
 	}
+
+	url := c.GetUrl("get-tokens", queryMap)
+
+	bytes, err := c.DoGetBytes(url)
+	if err != nil {
+		return nil, err
+	}
+
+	var tokens []*Token
+	err = json.Unmarshal(bytes, &tokens)
+	if err != nil {
+		return nil, err
+	}
+	return tokens, nil
+}
+
+func (c *Client) GetPaginationTokens(p int, pageSize int, queryMap map[string]string) ([]*Token, int, error) {
+	queryMap["owner"] = "admin"
+	queryMap["p"] = strconv.Itoa(p)
+	queryMap["pageSize"] = strconv.Itoa(pageSize)
 
 	url := c.GetUrl("get-tokens", queryMap)
 
@@ -112,28 +88,82 @@ func (c *Client) GetTokens(p int, pageSize int) ([]*Token, int, error) {
 		return nil, 0, err
 	}
 
-	tokens, ok := response.Data.([]*Token)
-	if !ok {
+	dataBytes, err := json.Marshal(response.Data)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var tokens []*Token
+	err = json.Unmarshal(dataBytes, &tokens)
+	if err != nil {
 		return nil, 0, errors.New("response data format is incorrect")
 	}
 
 	return tokens, int(response.Data2.(float64)), nil
 }
 
-func (c *Client) DeleteToken(name string) (bool, error) {
-	organization := Organization{
-		Owner: "admin",
-		Name:  name,
-	}
-	postBytes, err := json.Marshal(organization)
-	if err != nil {
-		return false, err
+func (c *Client) GetToken(name string) (*Token, error) {
+	queryMap := map[string]string{
+		"id": fmt.Sprintf("%s/%s", "admin", name),
 	}
 
-	resp, err := c.DoPost("delete-token", nil, postBytes, false, false)
+	url := c.GetUrl("get-token", queryMap)
+
+	bytes, err := c.DoGetBytes(url)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	return resp.Data == "Affected", nil
+	var token *Token
+	err = json.Unmarshal(bytes, &token)
+	if err != nil {
+		return nil, err
+	}
+	return token, nil
+}
+
+func (c *Client) UpdateToken(token *Token) (bool, error) {
+	_, affected, err := c.modifyToken("update-token", token, nil)
+	return affected, err
+}
+
+func (c *Client) UpdateTokenForColumns(token *Token, columns []string) (bool, error) {
+	_, affected, err := c.modifyToken("update-token", token, columns)
+	return affected, err
+}
+
+func (c *Client) AddToken(token *Token) (bool, error) {
+	_, affected, err := c.modifyToken("add-token", token, nil)
+	return affected, err
+}
+
+func (c *Client) DeleteToken(token *Token) (bool, error) {
+	_, affected, err := c.modifyToken("delete-token", token, nil)
+	return affected, err
+}
+
+func (c *Client) IntrospectToken(token, tokenTypeHint string) (result *IntrospectTokenResult, err error) {
+	queryMap := map[string]string{
+		"token":           token,
+		"token_type_hint": tokenTypeHint,
+	}
+
+	contentType, body, err := createForm(queryMap)
+	if err != nil {
+		return
+	}
+
+	url := c.GetUrl("login/oauth/introspect", nil)
+
+	respBytes, err := c.DoPostBytesRaw(url, contentType, body)
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(respBytes, &result)
+	if err != nil {
+		return
+	}
+
+	return
 }

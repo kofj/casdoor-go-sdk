@@ -75,8 +75,14 @@ func (c *Client) GetPaginationProducts(p int, pageSize int, queryMap map[string]
 		return nil, 0, err
 	}
 
-	products, ok := response.Data.([]*Product)
-	if !ok {
+	dataBytes, err := json.Marshal(response.Data)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var products []*Product
+	err = json.Unmarshal(dataBytes, &products)
+	if err != nil {
 		return nil, 0, errors.New("response data format is incorrect")
 	}
 
@@ -118,23 +124,28 @@ func (c *Client) DeleteProduct(product *Product) (bool, error) {
 	return affected, err
 }
 
-func (c *Client) BuyProduct(name string, providerName string) (*Product, error) {
+func (c *Client) BuyProduct(name string, providerName string, userName string) (*Product, error) {
 	queryMap := map[string]string{
 		"id":           fmt.Sprintf("%s/%s", c.OrganizationName, name),
 		"providerName": providerName,
+		"userName":     userName,
 	}
 
-	url := c.GetUrl("buy-product", queryMap)
-
-	bytes, err := c.DoGetBytes(url)
+	resp, err := c.DoPost("buy-product", queryMap, []byte(""), false, false)
 	if err != nil {
 		return nil, err
 	}
 
-	var product *Product
-	err = json.Unmarshal(bytes, &product)
+	productJson, err := json.Marshal(resp.Data)
 	if err != nil {
 		return nil, err
 	}
-	return product, nil
+
+	var product Product
+	err = json.Unmarshal(productJson, &product)
+	if err != nil {
+		return nil, err
+	}
+
+	return &product, nil
 }

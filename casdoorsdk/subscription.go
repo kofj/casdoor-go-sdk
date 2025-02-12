@@ -22,27 +22,35 @@ import (
 	"time"
 )
 
-// Subscription has the same definition as https://github.com/casdoor/casdoor/blob/master/object/subscription.go#L24
+type SubscriptionState string
+
+const (
+	SubStatePending   SubscriptionState = "Pending"
+	SubStateError     SubscriptionState = "Error"
+	SubStateSuspended SubscriptionState = "Suspended" // suspended by the admin
+
+	SubStateActive   SubscriptionState = "Active"
+	SubStateUpcoming SubscriptionState = "Upcoming"
+	SubStateExpired  SubscriptionState = "Expired"
+)
+
+// Subscription has the same definition as https://github.com/casdoor/casdoor/blob/master/object/subscription.go#L39
 type Subscription struct {
 	Owner       string `xorm:"varchar(100) notnull pk" json:"owner"`
 	Name        string `xorm:"varchar(100) notnull pk" json:"name"`
-	CreatedTime string `xorm:"varchar(100)" json:"createdTime"`
 	DisplayName string `xorm:"varchar(100)" json:"displayName"`
+	CreatedTime string `xorm:"varchar(100)" json:"createdTime"`
+	Description string `xorm:"varchar(100)" json:"description"`
 
-	StartDate   time.Time `json:"startDate"`
-	EndDate     time.Time `json:"endDate"`
-	Duration    int       `json:"duration"`
-	Description string    `xorm:"varchar(100)" json:"description"`
+	User    string `xorm:"varchar(100)" json:"user"`
+	Pricing string `xorm:"varchar(100)" json:"pricing"`
+	Plan    string `xorm:"varchar(100)" json:"plan"`
+	Payment string `xorm:"varchar(100)" json:"payment"`
 
-	User string `xorm:"mediumtext" json:"user"`
-	Plan string `xorm:"varchar(100)" json:"plan"`
-
-	IsEnabled   bool   `json:"isEnabled"`
-	Submitter   string `xorm:"varchar(100)" json:"submitter"`
-	Approver    string `xorm:"varchar(100)" json:"approver"`
-	ApproveTime string `xorm:"varchar(100)" json:"approveTime"`
-
-	State string `xorm:"varchar(100)" json:"state"`
+	StartTime time.Time         `json:"startTime"`
+	EndTime   time.Time         `json:"endTime"`
+	Period    string            `xorm:"varchar(100)" json:"period"`
+	State     SubscriptionState `xorm:"varchar(100)" json:"state"`
 }
 
 func (c *Client) GetSubscriptions() ([]*Subscription, error) {
@@ -70,16 +78,24 @@ func (c *Client) GetPaginationSubscriptions(p int, pageSize int, queryMap map[st
 	queryMap["p"] = strconv.Itoa(p)
 	queryMap["pageSize"] = strconv.Itoa(pageSize)
 
-	url := c.GetUrl("get-providers", queryMap)
+	url := c.GetUrl("get-subscriptions", queryMap)
 
 	response, err := c.DoGetResponse(url)
 	if err != nil {
 		return nil, 0, err
 	}
-	subscriptions, ok := response.Data.([]*Subscription)
-	if !ok {
+
+	dataBytes, err := json.Marshal(response.Data)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var subscriptions []*Subscription
+	err = json.Unmarshal(dataBytes, &subscriptions)
+	if err != nil {
 		return nil, 0, errors.New("response data format is incorrect")
 	}
+
 	return subscriptions, int(response.Data2.(float64)), nil
 }
 

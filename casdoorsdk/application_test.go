@@ -16,7 +16,6 @@ package casdoorsdk
 
 import (
 	"testing"
-	"time"
 )
 
 func TestApplication(t *testing.T) {
@@ -26,9 +25,9 @@ func TestApplication(t *testing.T) {
 
 	// Add a new object
 	application := &Application{
-		Owner:        "casbin",
+		Owner:        "admin",
 		Name:         name,
-		CreatedTime:  time.Now().Format(time.RFC3339),
+		CreatedTime:  GetCurrentTime(),
 		DisplayName:  name,
 		Logo:         "https://cdn.casbin.org/img/casdoor-logo_1185x256.png",
 		HomepageUrl:  "https://casdoor.org",
@@ -83,14 +82,14 @@ func TestApplication(t *testing.T) {
 	}
 
 	// Delete the object
-	_, err = DeleteApplication(name)
+	_, err = DeleteApplication(application)
 	if err != nil {
 		t.Fatalf("Failed to delete object: %v", err)
 	}
 
 	// Validate the deletion
 	deletedApplication, err := GetApplication(name)
-	if err == nil || deletedApplication != nil {
+	if err != nil || deletedApplication != nil {
 		t.Fatalf("Failed to delete object, it's still retrievable")
 	}
 }

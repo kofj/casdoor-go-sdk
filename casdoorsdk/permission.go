@@ -29,6 +29,7 @@ type Permission struct {
 	Description string `xorm:"varchar(100)" json:"description"`
 
 	Users   []string `xorm:"mediumtext" json:"users"`
+	Groups  []string `xorm:"mediumtext" json:"groups"`
 	Roles   []string `xorm:"mediumtext" json:"roles"`
 	Domains []string `xorm:"mediumtext" json:"domains"`
 
@@ -98,8 +99,14 @@ func (c *Client) GetPaginationPermissions(p int, pageSize int, queryMap map[stri
 		return nil, 0, err
 	}
 
-	permissions, ok := response.Data.([]*Permission)
-	if !ok {
+	dataBytes, err := json.Marshal(response.Data)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var permissions []*Permission
+	err = json.Unmarshal(dataBytes, &permissions)
+	if err != nil {
 		return nil, 0, errors.New("response data format is incorrect")
 	}
 

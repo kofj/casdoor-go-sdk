@@ -89,8 +89,14 @@ func (c *Client) GetPaginationPayments(p int, pageSize int, queryMap map[string]
 		return nil, 0, err
 	}
 
-	payments, ok := response.Data.([]*Payment)
-	if !ok {
+	dataBytes, err := json.Marshal(response.Data)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var payments []*Payment
+	err = json.Unmarshal(dataBytes, &payments)
+	if err != nil {
 		return nil, 0, errors.New("response data format is incorrect")
 	}
 
@@ -117,14 +123,11 @@ func (c *Client) GetPayment(name string) (*Payment, error) {
 	return payment, nil
 }
 
-func (c *Client) GetUserPayments() ([]*Payment, error) {
-	return nil, errors.New("Not implemented")
+func (c *Client) GetUserPayments(userName string) ([]*Payment, error) {
 	queryMap := map[string]string{
-		"owner":       c.OrganizationName,
-		"orgnization": c.OrganizationName,
-		// TODO: get user name
-		//"user": c.
-
+		"owner":        c.OrganizationName,
+		"organization": c.OrganizationName,
+		"user":         userName,
 	}
 
 	url := c.GetUrl("get-user-payments", queryMap)

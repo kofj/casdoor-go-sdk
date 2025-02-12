@@ -1,4 +1,4 @@
-// Copyright 2021 The Casdoor Authors. All Rights Reserved.
+// Copyright 2023 The Casdoor Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,215 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// TODO: add enforcer, syncer, subscription, session, resource, record, product,
-// pricing, plan, payment, model, message, account, group, chat, cert, adapter,
-
 package casdoorsdk
 
 import (
-	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
-	"net/http"
 	"strings"
 )
-
-// client is a shared http Client.
-var client HttpClient = &http.Client{}
-
-// SetHttpClient sets custom http Client.
-func SetHttpClient(httpClient HttpClient) {
-	client = httpClient
-}
-
-// HttpClient interface has the method required to use a type as custom http client.
-// The net/*http.Client type satisfies this interface.
-type HttpClient interface {
-	Do(*http.Request) (*http.Response, error)
-}
-
-type Response struct {
-	Status string      `json:"status"`
-	Msg    string      `json:"msg"`
-	Data   interface{} `json:"data"`
-	Data2  interface{} `json:"data2"`
-}
-
-// DoGetResponse is a general function to get response from param url through HTTP Get method.
-func (c *Client) DoGetResponse(url string) (*Response, error) {
-	respBytes, err := c.doGetBytesRawWithoutCheck(url)
-	if err != nil {
-		return nil, err
-	}
-
-	var response Response
-	err = json.Unmarshal(respBytes, &response)
-	if err != nil {
-		return nil, err
-	}
-
-	if response.Status != "ok" {
-		return nil, fmt.Errorf(response.Msg)
-	}
-
-	return &response, nil
-}
-
-// DoGetBytes is a general function to get response data in bytes from param url through HTTP Get method.
-func (c *Client) DoGetBytes(url string) ([]byte, error) {
-	response, err := c.DoGetResponse(url)
-	if err != nil {
-		return nil, err
-	}
-
-	res, err := json.Marshal(response.Data)
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
-}
-
-// DoGetBytesRaw is a general function to get response from param url through HTTP Get method.
-func (c *Client) DoGetBytesRaw(url string) ([]byte, error) {
-	respBytes, err := c.doGetBytesRawWithoutCheck(url)
-	if err != nil {
-		return nil, err
-	}
-
-	var response Response
-	err = json.Unmarshal(respBytes, &response)
-	if err == nil && response.Status == "error" {
-		return nil, errors.New(response.Msg)
-	}
-
-	return respBytes, nil
-}
-
-func (c *Client) DoPost(action string, queryMap map[string]string, postBytes []byte, isForm, isFile bool) (*Response, error) {
-	url := c.GetUrl(action, queryMap)
-
-	var err error
-	var contentType string
-	var body io.Reader
-	if isForm {
-		if isFile {
-			contentType, body, err = createFormFile(map[string][]byte{"file": postBytes})
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			var params map[string]string
-			err = json.Unmarshal(postBytes, &params)
-			if err != nil {
-				return nil, err
-			}
-
-			contentType, body, err = createForm(params)
-			if err != nil {
-				return nil, err
-			}
-		}
-	} else {
-		contentType = "text/plain;charset=UTF-8"
-		body = bytes.NewReader(postBytes)
-	}
-
-	respBytes, err := c.DoPostBytesRaw(url, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response Response
-	err = json.Unmarshal(respBytes, &response)
-	if err != nil {
-		return nil, err
-	}
-
-	if response.Status != "ok" {
-		return nil, fmt.Errorf(response.Msg)
-	}
-
-	return &response, nil
-}
-
-// DoPostBytesRaw is a general function to post a request from url, body through HTTP Post method.
-func (c *Client) DoPostBytesRaw(url string, contentType string, body io.Reader) ([]byte, error) {
-	if contentType == "" {
-		contentType = "text/plain;charset=UTF-8"
-	}
-
-	var resp *http.Response
-
-	req, err := http.NewRequest("POST", url, body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.SetBasicAuth(c.ClientId, c.ClientSecret)
-	req.Header.Set("Content-Type", contentType)
-
-	resp, err = client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			return
-		}
-	}(resp.Body)
-
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusForbidden {
-		return nil, fmt.Errorf("%s", string(respBytes))
-	}
-
-	return respBytes, nil
-}
-
-// doGetBytesRawWithoutCheck is a general function to get response from param url through HTTP Get method without checking response status
-func (c *Client) doGetBytesRawWithoutCheck(url string) ([]byte, error) {
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.SetBasicAuth(c.ClientId, c.ClientSecret)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			return
-		}
-	}(resp.Body)
-
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusForbidden {
-		return nil, fmt.Errorf("%s", string(respBytes))
-	}
-
-	return respBytes, nil
-}
 
 // modifyOrganization is an encapsulation of permission CUD(Create, Update, Delete) operations.
 // possible actions are `add-organization`, `update-organization`, `delete-organization`,
 func (c *Client) modifyOrganization(action string, organization *Organization, columns []string) (*Response, bool, error) {
+	if organization.Owner == "" {
+		organization.Owner = "admin"
+	}
+
 	queryMap := map[string]string{
 		"id": fmt.Sprintf("%s/%s", organization.Owner, organization.Name),
 	}
@@ -229,7 +35,6 @@ func (c *Client) modifyOrganization(action string, organization *Organization, c
 		queryMap["columns"] = strings.Join(columns, ",")
 	}
 
-	// organization.Owner = c.OrganizationName
 	postBytes, err := json.Marshal(organization)
 	if err != nil {
 		return nil, false, err
@@ -246,6 +51,10 @@ func (c *Client) modifyOrganization(action string, organization *Organization, c
 // modifyApplication is an encapsulation of permission CUD(Create, Update, Delete) operations.
 // possible actions are `add-application`, `update-application`, `delete-application`,
 func (c *Client) modifyApplication(action string, application *Application, columns []string) (*Response, bool, error) {
+	if application.Owner == "" {
+		application.Owner = "admin"
+	}
+
 	queryMap := map[string]string{
 		"id": fmt.Sprintf("%s/%s", application.Owner, application.Name),
 	}
@@ -254,9 +63,6 @@ func (c *Client) modifyApplication(action string, application *Application, colu
 		queryMap["columns"] = strings.Join(columns, ",")
 	}
 
-	if application.Owner == "" {
-		application.Owner = "admin"
-	}
 	postBytes, err := json.Marshal(application)
 	if err != nil {
 		return nil, false, err
@@ -335,7 +141,9 @@ func (c *Client) modifyUserById(action string, id string, user *User, columns []
 		queryMap["columns"] = strings.Join(columns, ",")
 	}
 
-	user.Owner = c.OrganizationName
+	if user.Owner == "" {
+		user.Owner = c.OrganizationName
+	}
 	postBytes, err := json.Marshal(user)
 	if err != nil {
 		return nil, false, err
@@ -410,7 +218,9 @@ func (c *Client) modifyCert(action string, cert *Cert, columns []string) (*Respo
 		queryMap["columns"] = strings.Join(columns, ",")
 	}
 
-	cert.Owner = c.OrganizationName
+	if cert.Owner == "" {
+		cert.Owner = c.OrganizationName
+	}
 	postBytes, err := json.Marshal(cert)
 	if err != nil {
 		return nil, false, err
@@ -436,6 +246,37 @@ func (c *Client) modifyEnforcer(action string, enforcer *Enforcer, columns []str
 
 	enforcer.Owner = c.OrganizationName
 	postBytes, err := json.Marshal(enforcer)
+	if err != nil {
+		return nil, false, err
+	}
+
+	resp, err := c.DoPost(action, queryMap, postBytes, false, false)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return resp, resp.Data == "Affected", nil
+}
+
+// modifyPolicy is an encapsulation of cert CUD(Create, Update, Delete) operations.
+func (c *Client) modifyPolicy(action string, enforcer *Enforcer, policies []*CasbinRule, columns []string) (*Response, bool, error) {
+	enforcer.Owner = c.OrganizationName
+	queryMap := map[string]string{
+		"id": fmt.Sprintf("%s/%s", enforcer.Owner, enforcer.Name),
+	}
+
+	if len(columns) != 0 {
+		queryMap["columns"] = strings.Join(columns, ",")
+	}
+
+	var postBytes []byte
+	var err error
+	if action == "update-policy" {
+		postBytes, err = json.Marshal(policies)
+	} else {
+		postBytes, err = json.Marshal(policies[0])
+	}
+
 	if err != nil {
 		return nil, false, err
 	}
@@ -673,6 +514,31 @@ func (c *Client) modifySyncer(action string, syncer *Syncer, columns []string) (
 	return resp, resp.Data == "Affected", nil
 }
 
+// modifyTransaction is an encapsulation of cert CUD(Create, Update, Delete) operations.
+// possible actions are `add-transaction`, `update-transaction`, `delete-transaction`,
+func (c *Client) modifyTransaction(action string, transaction *Transaction, columns []string) (*Response, bool, error) {
+	queryMap := map[string]string{
+		"id": fmt.Sprintf("%s/%s", transaction.Owner, transaction.Name),
+	}
+
+	if len(columns) != 0 {
+		queryMap["columns"] = strings.Join(columns, ",")
+	}
+
+	transaction.Owner = c.OrganizationName
+	postBytes, err := json.Marshal(transaction)
+	if err != nil {
+		return nil, false, err
+	}
+
+	resp, err := c.DoPost(action, queryMap, postBytes, false, false)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return resp, resp.Data == "Affected", nil
+}
+
 // modifyWebhook is an encapsulation of cert CUD(Create, Update, Delete) operations.
 // possible actions are `add-webhook`, `update-webhook`, `delete-webhook`,
 func (c *Client) modifyWebhook(action string, webhook *Webhook, columns []string) (*Response, bool, error) {
@@ -686,6 +552,32 @@ func (c *Client) modifyWebhook(action string, webhook *Webhook, columns []string
 
 	webhook.Owner = c.OrganizationName
 	postBytes, err := json.Marshal(webhook)
+	if err != nil {
+		return nil, false, err
+	}
+
+	resp, err := c.DoPost(action, queryMap, postBytes, false, false)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return resp, resp.Data == "Affected", nil
+}
+
+// modifyToken is an encapsulation of cert CUD(Create, Update, Delete) operations.
+// possible actions are `add-token`, `update-token`, `delete-token`,
+func (c *Client) modifyToken(action string, token *Token, columns []string) (*Response, bool, error) {
+	token.Owner = "admin"
+
+	queryMap := map[string]string{
+		"id": fmt.Sprintf("%s/%s", token.Owner, token.Name),
+	}
+
+	if len(columns) != 0 {
+		queryMap["columns"] = strings.Join(columns, ",")
+	}
+
+	postBytes, err := json.Marshal(token)
 	if err != nil {
 		return nil, false, err
 	}

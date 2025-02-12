@@ -45,22 +45,32 @@ type Organization struct {
 	Name        string `xorm:"varchar(100) notnull pk" json:"name"`
 	CreatedTime string `xorm:"varchar(100)" json:"createdTime"`
 
-	DisplayName        string     `xorm:"varchar(100)" json:"displayName"`
-	WebsiteUrl         string     `xorm:"varchar(100)" json:"websiteUrl"`
-	Favicon            string     `xorm:"varchar(100)" json:"favicon"`
-	PasswordType       string     `xorm:"varchar(100)" json:"passwordType"`
-	PasswordSalt       string     `xorm:"varchar(100)" json:"passwordSalt"`
-	PasswordOptions    []string   `xorm:"varchar(100)" json:"passwordOptions"`
-	CountryCodes       []string   `xorm:"varchar(200)"  json:"countryCodes"`
-	DefaultAvatar      string     `xorm:"varchar(200)" json:"defaultAvatar"`
-	DefaultApplication string     `xorm:"varchar(100)" json:"defaultApplication"`
-	Tags               []string   `xorm:"mediumtext" json:"tags"`
-	Languages          []string   `xorm:"varchar(255)" json:"languages"`
-	ThemeData          *ThemeData `xorm:"json" json:"themeData"`
-	MasterPassword     string     `xorm:"varchar(100)" json:"masterPassword"`
-	InitScore          int        `json:"initScore"`
-	EnableSoftDeletion bool       `json:"enableSoftDeletion"`
-	IsProfilePublic    bool       `json:"isProfilePublic"`
+	DisplayName            string     `xorm:"varchar(100)" json:"displayName"`
+	WebsiteUrl             string     `xorm:"varchar(100)" json:"websiteUrl"`
+	Logo                   string     `xorm:"varchar(200)" json:"logo"`
+	LogoDark               string     `xorm:"varchar(200)" json:"logoDark"`
+	Favicon                string     `xorm:"varchar(200)" json:"favicon"`
+	PasswordType           string     `xorm:"varchar(100)" json:"passwordType"`
+	PasswordSalt           string     `xorm:"varchar(100)" json:"passwordSalt"`
+	PasswordOptions        []string   `xorm:"varchar(100)" json:"passwordOptions"`
+	PasswordObfuscatorType string     `xorm:"varchar(100)" json:"passwordObfuscatorType"`
+	PasswordObfuscatorKey  string     `xorm:"varchar(100)" json:"passwordObfuscatorKey"`
+	CountryCodes           []string   `xorm:"varchar(200)"  json:"countryCodes"`
+	DefaultAvatar          string     `xorm:"varchar(200)" json:"defaultAvatar"`
+	DefaultApplication     string     `xorm:"varchar(100)" json:"defaultApplication"`
+	Tags                   []string   `xorm:"mediumtext" json:"tags"`
+	Languages              []string   `xorm:"varchar(255)" json:"languages"`
+	ThemeData              *ThemeData `xorm:"json" json:"themeData"`
+	MasterPassword         string     `xorm:"varchar(100)" json:"masterPassword"`
+	DefaultPassword        string     `xorm:"varchar(100)" json:"defaultPassword"`
+	MasterVerificationCode string     `xorm:"varchar(100)" json:"masterVerificationCode"`
+	IpWhitelist            string     `xorm:"varchar(200)" json:"ipWhitelist"`
+	InitScore              int        `json:"initScore"`
+	EnableSoftDeletion     bool       `json:"enableSoftDeletion"`
+	IsProfilePublic        bool       `json:"isProfilePublic"`
+	UseEmailAsUsername     bool       `json:"useEmailAsUsername"`
+	EnableTour             bool       `json:"enableTour"`
+	IpRestriction          string     `json:"ipRestriction"`
 
 	MfaItems     []*MfaItem     `xorm:"varchar(300)" json:"mfaItems"`
 	AccountItems []*AccountItem `xorm:"varchar(5000)" json:"accountItems"`
@@ -68,7 +78,7 @@ type Organization struct {
 
 func (c *Client) GetOrganization(name string) (*Organization, error) {
 	queryMap := map[string]string{
-		"id": fmt.Sprintf("%s/%s", c.OrganizationName, name),
+		"id": fmt.Sprintf("%s/%s", "admin", name),
 	}
 
 	url := c.GetUrl("get-organization", queryMap)
@@ -127,20 +137,12 @@ func (c *Client) GetOrganizationNames() ([]*Organization, error) {
 }
 
 func (c *Client) AddOrganization(organization *Organization) (bool, error) {
-	if organization.Owner == "" {
-		organization.Owner = "admin"
-	}
 	_, affected, err := c.modifyOrganization("add-organization", organization, nil)
 	return affected, err
 }
 
-func (c *Client) DeleteOrganization(name string) (bool, error) {
-	organization := Organization{
-		Owner: "admin",
-		Name:  name,
-	}
-
-	_, affected, err := c.modifyOrganization("delete-organization", &organization, nil)
+func (c *Client) DeleteOrganization(organization *Organization) (bool, error) {
+	_, affected, err := c.modifyOrganization("delete-organization", organization, nil)
 	return affected, err
 }
 

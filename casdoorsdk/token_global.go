@@ -14,22 +14,30 @@
 
 package casdoorsdk
 
-import (
-	"golang.org/x/oauth2"
-)
-
-func GetOAuthToken(code string, state string) (*oauth2.Token, error) {
-	return globalClient.GetOAuthToken(code, state)
+func GetTokens() ([]*Token, error) {
+	return globalClient.GetTokens()
 }
 
-func RefreshOAuthToken(refreshToken string) (*oauth2.Token, error) {
-	return globalClient.RefreshOAuthToken(refreshToken)
+func GetPaginationTokens(p int, pageSize int, queryMap map[string]string) ([]*Token, int, error) {
+	return globalClient.GetPaginationTokens(p, pageSize, queryMap)
 }
 
-func GetTokens(p int, pageSize int) ([]*Token, int, error) {
-	return globalClient.GetTokens(p, pageSize)
+func GetToken(name string) (*Token, error) {
+	return globalClient.GetToken(name)
 }
 
-func DeleteToken(name string) (bool, error) {
-	return globalClient.DeleteToken(name)
+func UpdateToken(token *Token) (bool, error) {
+	return globalClient.UpdateToken(token)
+}
+
+func UpdateTokenForColumns(token *Token, columns []string) (bool, error) {
+	return globalClient.UpdateTokenForColumns(token, columns)
+}
+
+func AddToken(token *Token) (bool, error) {
+	return globalClient.AddToken(token)
+}
+
+func DeleteToken(token *Token) (bool, error) {
+	return globalClient.DeleteToken(token)
 }
